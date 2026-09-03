@@ -61,7 +61,7 @@
 
 ### Day 9-14|創建型 Pattern(階段一:小攤子起步)
 
-- [ ] 9. Factory Method——生成不同飲料(拿鐵/美式/摩卡)
+- [ ] 9. Factory Method——生成不同飲料(拿鐵/美式)
 - [ ] 10. Abstract Factory——早餐套餐/下午茶套餐,一次生成飲料+點心+贈品的整組組合
 - [ ] 11. Builder——客製化飲料(少冰、半糖、加燕麥奶)
 - [ ] 12. Singleton——菜單設定/庫存全店共用(順便講 AI 誤用 Singleton)
@@ -70,8 +70,8 @@
 
 ### Day 15-21|結構型 Pattern(階段二:展店、串外送平台)
 
-- [ ] 15. Adapter——串接 Uber Eats / foodpanda 資料格式轉換
-- [ ] 16. Decorator——飲料加購(加濃縮、加珍珠、加奶蓋)
+- [ ] 15. Decorator——扣款成功後的收尾動作(開立發票、列印明細單)
+- [ ] 16. Adapter——串接 Uber Eats / foodpanda 資料格式轉換
 - [ ] 17. Facade——結帳流程包成簡單介面
 - [ ] 18. Proxy——會員優惠查詢的快取/權限代理
 - [ ] 19. Composite——菜單樹狀分類結構
