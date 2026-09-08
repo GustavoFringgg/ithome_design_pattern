@@ -8,7 +8,7 @@
 
 ---
 
-## 累積總覽表（目前寫到 Day 21）
+## 累積總覽表（目前寫到 Day 22）
 
 | 名稱 | 種類 | 首次出現 | 目前定案（最後一次被改的那天） | 目前定案的簽章／欄位 |
 |---|---|---|---|---|
@@ -81,6 +81,10 @@
 | `DrinkSpec` | class | Day 21 | Day 21 | Flyweight（ConcreteFlyweight，簡化版沒拉獨立介面）：`Name`／`BasePrice`／`IconUrl`，只放不會因訂單而改變的內在狀態，建構子注入後三個屬性皆唯讀 |
 | `DrinkSpecFactory` | class | Day 21 | Day 21 | FlyweightFactory：內部 `Dictionary<string, DrinkSpec> _pool`，`GetSpec(string name, int basePrice, string iconUrl): DrinkSpec`——依 `name` 查快取，查無才 `new` 並存入 `_pool` |
 | `OrderLine` | class | Day 21 | Day 21 | 這是柴咖啡系統**第一次**出現叫 `OrderLine` 的類別，跟 Day 16 定案的 `OrderItem`（`DrinkName`/`Quantity`）是刻意取的不同名字、不衝突；同一天內從壞版本（`DrinkName`/`BasePrice`/`IconUrl`/`Sugar`/`Ice`/`Quantity` 六個欄位各自持有一份完整資料）演進到最終版本（`Spec: DrinkSpec`＋`Sugar`/`Ice`/`Quantity` 三個外在狀態，飲品資料改成共享的 `DrinkSpec` 參考） |
+| `IPromotionStrategy` | interface | Day 22 | Day 22 | `Apply(Order order): int`——直接沿用 Day 16 定案的 `Order.TotalPrice`／`Order.Items[].Quantity`，不依賴 `OrderItem.Price`（目前沒有這個欄位）。刻意跟 Day 5/6（LSP/ISP）的 `IDiscount` 錯開命名，兩組介面彼此無關、不算衝突 |
+| `PercentageOffStrategy` / `BuyOneGetOneStrategy` / `PointsRedemptionStrategy` | class | Day 22 | Day 22 | 皆實作 `IPromotionStrategy` |
+| `PromotionContext` | class | Day 22 | Day 22 | 建構子注入 `IPromotionStrategy`，`SetStrategy(IPromotionStrategy strategy): void`（執行期可替換）、`CalculateFinalPrice(Order order): int` |
+| `StoreCheckoutService` | class | Day 22 | ⚠️ Day 22 內就被棄用 | 同一天內從壞版本（`CalculateFinalPrice(Order order, string storeCode): int`，只有台北/台中兩個分支）演進到再壞版本（新增高雄店分支後簽章變成 `CalculateFinalPrice(Order order, string storeCode, int usedPoints): int`，`usedPoints` 只有高雄店用得到），被同一天的 Strategy 版本取代，**不要在之後的天數延用這個名字**；這是柴咖啡系統第 6 個「結帳/前台」類的類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`/`StoreCheckoutService`），但這次是總部端管理跨分店促銷計算，跟前面幾個門市端類別職責不同 |
 
 **非柴咖啡系統類別**（獨立示範用，跟柴咖啡系統無關，不算進上面的累積表）：
 - Day 5（LSP）：`Vehicle`、`Toyota`、`Honda`、`Tesla`、`IRefuelable`、`IChargeable`
@@ -91,6 +95,7 @@
 - Day 13（Prototype）：`Resume`
 - Day 20（Bridge）：`Vehicle`、`FuelCar`/`FuelMotorcycle`/`FuelTruck`、`ElectricCar`/`ElectricMotorcycle`/`ElectricTruck`（壞版本，示範繼承爆炸）→ 最終版本重新定義 `Vehicle`（Abstraction）、`Car`/`Motorcycle`（RefinedAbstraction）、`IPowerSource`（Implementor）、`FuelEngine`/`ElectricMotor`（ConcreteImplementor）——⚠️ 這裡的 `Vehicle` 跟 Day 5（LSP）示範用的 `Vehicle` 是同一個名字，但兩天都是「非柴咖啡系統類別」的獨立示範，各自獨立、不影響柴咖啡主線，不算衝突，只是提醒一下這兩天剛好都借了同一個生活化情境的名字
 - Day 21（Flyweight）：`TreeType`（Flyweight/ConcreteFlyweight 簡化版，`Name`/`MeshData`/`TextureData`＋`Draw(int x, int y)`）、`TreeTypeFactory`（FlyweightFactory，`Dictionary<string, TreeType>` 快取池）、`Tree`（Context，持有外在狀態 `_x`/`_y` 與共享的 `TreeType` 參考）——遊戲森林場景類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+- Day 22（Strategy）：`IRouteStrategy`、`DrivingStrategy`/`TransitStrategy`/`WalkingStrategy`（ConcreteStrategy）、`NavigatorContext`（Context，`SetStrategy` 可執行期替換）——導航 App 選路線類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
 ---
 
@@ -377,6 +382,22 @@ public CheckoutController(MemberPointsProxy memberPointsService) { ... }
 
 ---
 
+## Day 22｜Strategy
+
+**故事狀態**：柴咖啡展店到第二家分店（台北打折扣戰、台中買一送一），阿柴一開始在 `StoreCheckoutService` 裡用 `storeCode` 判斷分店、if-else 各自算一次；後來開第三家店（高雄，主打集點折抵），阿柴得回頭補一個 `else if`，連方法簽章都要多加一個只有高雄店會用到的參數，小黑又想幫台北店做 A/B 測試（同時比較折扣戰跟買一送一），這支方法完全沒辦法在執行期動態切換促銷算法，才改用 Strategy 把三種算法拆成各自獨立、可替換的策略類別
+
+**這天新增/變更的類別**
+- `IPromotionStrategy`（新增）：`Apply(Order order): int`，直接沿用 Day 16 定案的 `Order.TotalPrice`／`Order.Items[].Quantity`，不依賴 `OrderItem.Price`（目前沒有這個欄位）；刻意跟 Day 5/6（LSP/ISP）的 `IDiscount` 命名錯開，兩組介面彼此無關、不算衝突，Day22 也沒有呼應 Day5/6 的舊故事
+- `PercentageOffStrategy`、`BuyOneGetOneStrategy`、`PointsRedemptionStrategy`（新增）：皆實作 `IPromotionStrategy`
+- `PromotionContext`（新增）：建構子注入 `IPromotionStrategy`，`SetStrategy(IPromotionStrategy strategy): void`（執行期可替換）、`CalculateFinalPrice(Order order): int`
+- `StoreCheckoutService`（新增，示範用）：`CalculateFinalPrice(Order order, string storeCode): int`，**同一天結尾就被棄用**，被 Strategy 版本取代，不要在之後的天數延用這個名字；這是柴咖啡系統第 6 個「結帳/前台」類的類別，但這次是總部端管理跨分店促銷計算，跟前面幾個門市端類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`）職責不同
+
+**非柴咖啡系統類別（生活化類比，導航 App 選路線）**：`IRouteStrategy`、`DrivingStrategy`/`TransitStrategy`/`WalkingStrategy`（ConcreteStrategy）、`NavigatorContext`（Context）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+
+**下一天會被動到的地方**：無，Day 23（Observer）換一個全新情境（庫存不足通知、訂單完成通知），不會再動到 `IPromotionStrategy`／`PromotionContext` 這組
+
+---
+
 ## 待辦：後續要補的天數
 
-- [ ] Day 22 之後陸續補入
+- [ ] Day 23 之後陸續補入
