@@ -77,7 +77,7 @@
 - [ ] 18. Proxy——會員優惠查詢的快取/權限代理
 - [ ] 19. Composite——菜單樹狀分類結構
 - [ ] 20. Bridge
-- [ ] 21. 結構型總結 + Flyweight 補充說明
+- [ ] 21. Flyweight
 
 ### Day 22-28|行為型 Pattern(階段三:連鎖店規模化)
 
