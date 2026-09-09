@@ -8,7 +8,7 @@
 
 ---
 
-## 累積總覽表（目前寫到 Day 22）
+## 累積總覽表（目前寫到 Day 23）
 
 | 名稱 | 種類 | 首次出現 | 目前定案（最後一次被改的那天） | 目前定案的簽章／欄位 |
 |---|---|---|---|---|
@@ -85,6 +85,11 @@
 | `PercentageOffStrategy` / `BuyOneGetOneStrategy` / `PointsRedemptionStrategy` | class | Day 22 | Day 22 | 皆實作 `IPromotionStrategy` |
 | `PromotionContext` | class | Day 22 | Day 22 | 建構子注入 `IPromotionStrategy`，`SetStrategy(IPromotionStrategy strategy): void`（執行期可替換）、`CalculateFinalPrice(Order order): int` |
 | `StoreCheckoutService` | class | Day 22 | ⚠️ Day 22 內就被棄用 | 同一天內從壞版本（`CalculateFinalPrice(Order order, string storeCode): int`，只有台北/台中兩個分支）演進到再壞版本（新增高雄店分支後簽章變成 `CalculateFinalPrice(Order order, string storeCode, int usedPoints): int`，`usedPoints` 只有高雄店用得到），被同一天的 Strategy 版本取代，**不要在之後的天數延用這個名字**；這是柴咖啡系統第 6 個「結帳/前台」類的類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`/`StoreCheckoutService`），但這次是總部端管理跨分店促銷計算，跟前面幾個門市端類別職責不同 |
+| `IStockObserver` | interface | Day 23 | Day 23 | `OnStockLow(string itemName, int quantity): void` |
+| `ProcurementNotifier` / `StoreManagerNotifier` / `HeadquartersDashboardNotifier` / `SmsProcurementNotifier` | class | Day 23 | Day 23 | 皆實作 `IStockObserver`；`SmsProcurementNotifier` 是高雄店專用、跟 `ProcurementNotifier` 做同一件事但改用簡訊 |
+| `InventoryService` | class | Day 23 | Day 23 | 同一天內從壞版本（`CheckStock(itemName, quantity)` 內部寫死依序呼叫 `NotifyProcurement`/`NotifyStoreManager`/`NotifySyncToHeadquartersDashboard` 三個 private 方法）演進到最終版本（`_observers: List<IStockObserver>`，`Subscribe`/`Unsubscribe`，`CheckStock()` 只負責偵測庫存＋通知已訂閱的觀察者） |
+| `IOrderObserver` | interface | Day 23 | Day 23 | `OnOrderCompleted(Order order): void`——直接沿用 Day 16 定案的 `Order`，補第二個 Subject 範例用，文中沒有寫出對應的 `OrderService` 訂閱端完整程式碼 |
+| `CustomerNotifier` / `DeliveryPlatformSyncer` | class | Day 23 | Day 23 | 皆實作 `IOrderObserver` |
 
 **非柴咖啡系統類別**（獨立示範用，跟柴咖啡系統無關，不算進上面的累積表）：
 - Day 5（LSP）：`Vehicle`、`Toyota`、`Honda`、`Tesla`、`IRefuelable`、`IChargeable`
@@ -96,6 +101,7 @@
 - Day 20（Bridge）：`Vehicle`、`FuelCar`/`FuelMotorcycle`/`FuelTruck`、`ElectricCar`/`ElectricMotorcycle`/`ElectricTruck`（壞版本，示範繼承爆炸）→ 最終版本重新定義 `Vehicle`（Abstraction）、`Car`/`Motorcycle`（RefinedAbstraction）、`IPowerSource`（Implementor）、`FuelEngine`/`ElectricMotor`（ConcreteImplementor）——⚠️ 這裡的 `Vehicle` 跟 Day 5（LSP）示範用的 `Vehicle` 是同一個名字，但兩天都是「非柴咖啡系統類別」的獨立示範，各自獨立、不影響柴咖啡主線，不算衝突，只是提醒一下這兩天剛好都借了同一個生活化情境的名字
 - Day 21（Flyweight）：`TreeType`（Flyweight/ConcreteFlyweight 簡化版，`Name`/`MeshData`/`TextureData`＋`Draw(int x, int y)`）、`TreeTypeFactory`（FlyweightFactory，`Dictionary<string, TreeType>` 快取池）、`Tree`（Context，持有外在狀態 `_x`/`_y` 與共享的 `TreeType` 參考）——遊戲森林場景類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 - Day 22（Strategy）：`IRouteStrategy`、`DrivingStrategy`/`TransitStrategy`/`WalkingStrategy`（ConcreteStrategy）、`NavigatorContext`（Context，`SetStrategy` 可執行期替換）——導航 App 選路線類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+- Day 23（Observer）：`IWeatherObserver`、`TrainOperator`/`School`/`ConvenienceStore`（ConcreteObserver）、`WeatherBureau`（Subject，`Subscribe`/`Unsubscribe`/`IssueHeavyRainAlert`）——氣象局豪雨特報類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
 ---
 
@@ -384,13 +390,13 @@ public CheckoutController(MemberPointsProxy memberPointsService) { ... }
 
 ## Day 22｜Strategy
 
-**故事狀態**：柴咖啡展店到第二家分店（台北打折扣戰、台中買一送一），阿柴一開始在 `StoreCheckoutService` 裡用 `storeCode` 判斷分店、if-else 各自算一次；後來開第三家店（高雄，主打集點折抵），阿柴得回頭補一個 `else if`，連方法簽章都要多加一個只有高雄店會用到的參數，小黑又想幫台北店做 A/B 測試（同時比較折扣戰跟買一送一），這支方法完全沒辦法在執行期動態切換促銷算法，才改用 Strategy 把三種算法拆成各自獨立、可替換的策略類別
+**故事狀態**：柴咖啡展店到第二家分店（台北打折扣戰、台中買一送一），阿柴一開始在 `StoreCheckoutService` 裡用 `storeCode` 判斷分店、if-else 各自算一次；後來開第三家店（高雄，主打集點折抵），阿柴得回頭補一個 `else if`，連方法簽章都要多加一個只有高雄店會用到的 `usedPoints` 參數；小黑又想抬高台中店業績，推出上午買一送一、下午改打折扣戰（台北維持原本的折扣戰不變），這支方法完全沒辦法在執行期動態切換促銷算法，才改用 Strategy 把三種算法拆成各自獨立、可替換的策略類別
 
 **這天新增/變更的類別**
 - `IPromotionStrategy`（新增）：`Apply(Order order): int`，直接沿用 Day 16 定案的 `Order.TotalPrice`／`Order.Items[].Quantity`，不依賴 `OrderItem.Price`（目前沒有這個欄位）；刻意跟 Day 5/6（LSP/ISP）的 `IDiscount` 命名錯開，兩組介面彼此無關、不算衝突，Day22 也沒有呼應 Day5/6 的舊故事
 - `PercentageOffStrategy`、`BuyOneGetOneStrategy`、`PointsRedemptionStrategy`（新增）：皆實作 `IPromotionStrategy`
 - `PromotionContext`（新增）：建構子注入 `IPromotionStrategy`，`SetStrategy(IPromotionStrategy strategy): void`（執行期可替換）、`CalculateFinalPrice(Order order): int`
-- `StoreCheckoutService`（新增，示範用）：`CalculateFinalPrice(Order order, string storeCode): int`，**同一天結尾就被棄用**，被 Strategy 版本取代，不要在之後的天數延用這個名字；這是柴咖啡系統第 6 個「結帳/前台」類的類別，但這次是總部端管理跨分店促銷計算，跟前面幾個門市端類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`）職責不同
+- `StoreCheckoutService`（新增，示範用）：同一天內從壞版本（`CalculateFinalPrice(Order order, string storeCode): int`，只有台北/台中兩個分支）演進到再壞版本（新增高雄店分支後簽章變成 `CalculateFinalPrice(Order order, string storeCode, int usedPoints): int`），**同一天結尾就被棄用**，被 Strategy 版本取代，不要在之後的天數延用這個名字；這是柴咖啡系統第 6 個「結帳/前台」類的類別，但這次是總部端管理跨分店促銷計算，跟前面幾個門市端類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`）職責不同
 
 **非柴咖啡系統類別（生活化類比，導航 App 選路線）**：`IRouteStrategy`、`DrivingStrategy`/`TransitStrategy`/`WalkingStrategy`（ConcreteStrategy）、`NavigatorContext`（Context）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
@@ -398,6 +404,23 @@ public CheckoutController(MemberPointsProxy memberPointsService) { ... }
 
 ---
 
+## Day 23｜Observer
+
+**故事狀態**：柴咖啡展店到三間分店規模，庫存不足這件事牽動的人越來越多——阿柴一開始在 `InventoryService.CheckStock()` 裡寫死依序呼叫「通知進貨窗口」，小黑陸續要求加上「推播通知店長」「同步總部庫存告急儀表板」，阿柴每次都得回頭改同一支方法；接著發現三家分店真正想要的通知組合又不一樣（台北多通知鮮乳廠商、高雄要把 LINE 通知換成簡訊），`CheckStock` 開始塞滿判斷分店代碼的 if-else，改用 Observer 把「收到通知後要做什麼」抽成獨立的觀察者，分店在啟動時自由訂閱要哪幾個，不用再改 `InventoryService` 本身
+
+**這天新增/變更的類別**
+- `IStockObserver` interface（新增）：`OnStockLow(string itemName, int quantity): void`
+- `ProcurementNotifier`、`StoreManagerNotifier`、`HeadquartersDashboardNotifier`、`SmsProcurementNotifier`（新增）：皆實作 `IStockObserver`
+- `InventoryService`（新增，同一天內從壞版本演進到最終版本）：壞版本是 `CheckStock(itemName, quantity)` 內部寫死依序呼叫三個 private 通知方法；最終版本改成 `_observers: List<IStockObserver>`，`Subscribe`/`Unsubscribe`，`CheckStock()` 只負責偵測庫存並通知已訂閱的觀察者
+- `IOrderObserver` interface（新增）：`OnOrderCompleted(Order order): void`，沿用 Day 16 定案的 `Order`，作為「同一套 Observer 思路套用在另一個 Subject」的補充範例，文中沒有寫出對應 `OrderService` 訂閱端的完整程式碼
+- `CustomerNotifier`、`DeliveryPlatformSyncer`（新增）：皆實作 `IOrderObserver`
+
+**非柴咖啡系統類別（生活化類比，氣象局豪雨特報）**：`IWeatherObserver`、`TrainOperator`/`School`/`ConvenienceStore`（ConcreteObserver）、`WeatherBureau`（Subject，`Subscribe`/`Unsubscribe`/`IssueHeavyRainAlert`）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+
+**下一天會被動到的地方**：無，Day 24（Command）換一個全新情境（點餐指令化，支援取消/重做），不會再動到 `IStockObserver`／`InventoryService`／`IOrderObserver` 這組
+
+---
+
 ## 待辦：後續要補的天數
 
-- [ ] Day 23 之後陸續補入
+- [ ] Day 24 之後陸續補入
