@@ -8,7 +8,7 @@
 
 ---
 
-## 累積總覽表（目前寫到 Day 23）
+## 累積總覽表（目前寫到 Day 25）
 
 | 名稱 | 種類 | 首次出現 | 目前定案（最後一次被改的那天） | 目前定案的簽章／欄位 |
 |---|---|---|---|---|
@@ -86,10 +86,19 @@
 | `PromotionContext` | class | Day 22 | Day 22 | 建構子注入 `IPromotionStrategy`，`SetStrategy(IPromotionStrategy strategy): void`（執行期可替換）、`CalculateFinalPrice(Order order): int` |
 | `StoreCheckoutService` | class | Day 22 | ⚠️ Day 22 內就被棄用 | 同一天內從壞版本（`CalculateFinalPrice(Order order, string storeCode): int`，只有台北/台中兩個分支）演進到再壞版本（新增高雄店分支後簽章變成 `CalculateFinalPrice(Order order, string storeCode, int usedPoints): int`，`usedPoints` 只有高雄店用得到），被同一天的 Strategy 版本取代，**不要在之後的天數延用這個名字**；這是柴咖啡系統第 6 個「結帳/前台」類的類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`/`StoreCheckoutService`），但這次是總部端管理跨分店促銷計算，跟前面幾個門市端類別職責不同 |
 | `IStockObserver` | interface | Day 23 | Day 23 | `OnStockLow(string itemName, int quantity): void` |
-| `ProcurementNotifier` / `StoreManagerNotifier` / `HeadquartersDashboardNotifier` / `SmsProcurementNotifier` | class | Day 23 | Day 23 | 皆實作 `IStockObserver`；`SmsProcurementNotifier` 是高雄店專用、跟 `ProcurementNotifier` 做同一件事但改用簡訊 |
+| `ProcurementNotifier` / `StoreManagerNotifier` / `HeadquartersDashboardNotifier` / `SmsProcurementNotifier` | class | Day 23 | Day 23 | 皆實作 `IStockObserver`；`SmsProcurementNotifier` 是高雄店專用、跟 `ProcurementNotifier` 做同一件事但改用簡訊；`HeadquartersDashboardNotifier` 在示範中只 `new` 一次、同一個實例同時被台北、高雄兩間店的 `InventoryService` 訂閱（示範「同一個 Observer 訂閱多個 Subject」） |
 | `InventoryService` | class | Day 23 | Day 23 | 同一天內從壞版本（`CheckStock(itemName, quantity)` 內部寫死依序呼叫 `NotifyProcurement`/`NotifyStoreManager`/`NotifySyncToHeadquartersDashboard` 三個 private 方法）演進到最終版本（`_observers: List<IStockObserver>`，`Subscribe`/`Unsubscribe`，`CheckStock()` 只負責偵測庫存＋通知已訂閱的觀察者） |
 | `IOrderObserver` | interface | Day 23 | Day 23 | `OnOrderCompleted(Order order): void`——直接沿用 Day 16 定案的 `Order`，補第二個 Subject 範例用，文中沒有寫出對應的 `OrderService` 訂閱端完整程式碼 |
 | `CustomerNotifier` / `DeliveryPlatformSyncer` | class | Day 23 | Day 23 | 皆實作 `IOrderObserver` |
+| `PaymentGateway` | class | Day 24 | Day 24 | 柴咖啡系統第一次出現這個名字，代表退款實際執行的金流閘道，跟 Day 15 定案、只有 `Charge(orderId, amount)` 的 `IPaymentProcessor`/`PaymentService` 是不同概念（那組沒有退款方法），刻意不重用避免牽連 Day 15/17/18 已知的 `CheckoutController` 三方衝突；`Refund(orderId, amount): void`、`ReverseRefund(orderId, amount): void` |
+| `MemberPointsLedger` | class | Day 24 | Day 24 | 柴咖啡系統第一次出現這個名字，代表補償點數的內部帳本，跟 Day 18 定案、只能查詢的 `IMemberPointsService`（`GetPoints`）是不同概念、不衝突；`AddBonusPoints(phoneNumber, points): void`、`RevokeBonusPoints(phoneNumber, points): void` |
+| `ICommand` | interface | Day 24 | Day 24 | `Execute(): void`、`Undo(): void` |
+| `RefundCommand` | class | Day 24 | Day 24 | 實作 `ICommand`，建構子注入 `PaymentGateway` 參考＋`orderId`/`amount`，`Execute()`/`Undo()` 互為鏡像操作（呼叫 `Refund`/`ReverseRefund`） |
+| `BonusPointsCommand` | class | Day 24 | Day 24 | 實作 `ICommand`，建構子注入 `MemberPointsLedger` 參考＋`phoneNumber`/`points`，`Execute()`/`Undo()` 互為鏡像操作（呼叫 `AddBonusPoints`/`RevokeBonusPoints`） |
+| `MacroCommand` | class | Day 24 | Day 24 | 實作 `ICommand`，內部持有 `List<ICommand>`，`Execute()` 依序正向執行、`Undo()` 反向走過每個子指令——示範客訴同時要退款＋補償點數，一次執行/一次整組撤銷 |
+| `SupportConsole` | class | Day 24 | Day 24 | Invoker，這天沒有壞版本鋪陳，阿柴直接以 Command 設計：`_undoStack`/`_redoStack: Stack<ICommand>`，`ExecuteCommand(ICommand): void`、`Undo(): void`、`Redo(): void` |
+| `DrinkRecipe` | 抽象類別 | Day 25 | Day 25 | AbstractClass：`Make(): void`（Template Method，**非 virtual、不可覆寫**，順序為 `NeedGrinding()`→`GrindBeans()`→`Extract()`→`AddIngredients()`→`SealAndLabel()`）；`private GrindBeans()`／`private SealAndLabel()`（固定步驟，製作時間標籤寫在 `SealAndLabel()`）；`protected abstract Extract()`／`protected abstract AddIngredients()`；`protected virtual NeedGrinding(): bool`（hook，預設 `true`） |
+| `LatteRecipe` / `AmericanoRecipe` / `MatchaLatteRecipe` | class | Day 25 | Day 25 | 皆繼承 `DrinkRecipe`，只覆寫 `Extract()`／`AddIngredients()`；`MatchaLatteRecipe` 另外覆寫 `NeedGrinding() => false`——⚠️ **刻意避開 Day 9／Day 11 已衝突的 `Latte`／`Americano` 類別名**（見上方 🔴 Day 11 那列），語意是「製作流程 SOP」而不是「飲料物件」，跟前面任何一天都不衝突 |
 
 **非柴咖啡系統類別**（獨立示範用，跟柴咖啡系統無關，不算進上面的累積表）：
 - Day 5（LSP）：`Vehicle`、`Toyota`、`Honda`、`Tesla`、`IRefuelable`、`IChargeable`
@@ -102,6 +111,8 @@
 - Day 21（Flyweight）：`TreeType`（Flyweight/ConcreteFlyweight 簡化版，`Name`/`MeshData`/`TextureData`＋`Draw(int x, int y)`）、`TreeTypeFactory`（FlyweightFactory，`Dictionary<string, TreeType>` 快取池）、`Tree`（Context，持有外在狀態 `_x`/`_y` 與共享的 `TreeType` 參考）——遊戲森林場景類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 - Day 22（Strategy）：`IRouteStrategy`、`DrivingStrategy`/`TransitStrategy`/`WalkingStrategy`（ConcreteStrategy）、`NavigatorContext`（Context，`SetStrategy` 可執行期替換）——導航 App 選路線類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 - Day 23（Observer）：`IWeatherObserver`、`TrainOperator`/`School`/`ConvenienceStore`（ConcreteObserver）、`WeatherBureau`（Subject，`Subscribe`/`Unsubscribe`/`IssueHeavyRainAlert`）——氣象局豪雨特報類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+- Day 24（Command）：`IDishCommand`、`Cook`（Receiver）、`SteakOrder`/`PastaOrder`（ConcreteCommand）、`Waiter`（Invoker，`_orderHistory: Stack<IDishCommand>`＋`TakeOrder`/`CancelLastOrder`）——餐廳點餐與廚房做菜類比（顧客=Client／點餐單=Command／服務生=Invoker／廚師=Receiver），跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+- Day 25（Template Method）：`TourPackage`（AbstractClass，`Run()` 是 Template Method；固定步驟 `Gather`/`ShoppingStop`/`GoHome`；抽象步驟 `MorningSpot`/`Lunch`/`AfternoonSpot`；hook `NeedShopping(): bool` 預設 `false`）、`HualienTour`/`YilanTour`（ConcreteClass，前者覆寫 `NeedShopping() => true`）——旅行社一日遊行程類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名。⚠️ 刻意**沒有**用 Head First 經典的「沖泡咖啡 vs 泡茶」當類比，因為那跟當天柴咖啡主線（飲料製作流程）完全重疊
 
 ---
 
@@ -412,15 +423,58 @@ public CheckoutController(MemberPointsProxy memberPointsService) { ... }
 - `IStockObserver` interface（新增）：`OnStockLow(string itemName, int quantity): void`
 - `ProcurementNotifier`、`StoreManagerNotifier`、`HeadquartersDashboardNotifier`、`SmsProcurementNotifier`（新增）：皆實作 `IStockObserver`
 - `InventoryService`（新增，同一天內從壞版本演進到最終版本）：壞版本是 `CheckStock(itemName, quantity)` 內部寫死依序呼叫三個 private 通知方法；最終版本改成 `_observers: List<IStockObserver>`，`Subscribe`/`Unsubscribe`，`CheckStock()` 只負責偵測庫存並通知已訂閱的觀察者
+- Demo 段落補充：`headquartersDashboard` 只 `new` 一個 `HeadquartersDashboardNotifier` 實例，同時給 `taipeiInventory`／`kaohsiungInventory` 兩個 `InventoryService` 訂閱，示範「同一個 Observer 訂閱多個 Subject」，呼應總部要看的是全連鎖店彙總的告急狀況，不是每家店各自一份
 - `IOrderObserver` interface（新增）：`OnOrderCompleted(Order order): void`，沿用 Day 16 定案的 `Order`，作為「同一套 Observer 思路套用在另一個 Subject」的補充範例，文中沒有寫出對應 `OrderService` 訂閱端的完整程式碼
 - `CustomerNotifier`、`DeliveryPlatformSyncer`（新增）：皆實作 `IOrderObserver`
 
 **非柴咖啡系統類別（生活化類比，氣象局豪雨特報）**：`IWeatherObserver`、`TrainOperator`/`School`/`ConvenienceStore`（ConcreteObserver）、`WeatherBureau`（Subject，`Subscribe`/`Unsubscribe`/`IssueHeavyRainAlert`）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
-**下一天會被動到的地方**：無，Day 24（Command）換一個全新情境（點餐指令化，支援取消/重做），不會再動到 `IStockObserver`／`InventoryService`／`IOrderObserver` 這組
+**下一天會被動到的地方**：無，Day 24（Command）換一個全新情境（客訴退款，支援撤銷/重做），不會再動到 `IStockObserver`／`InventoryService`／`IOrderObserver` 這組
+
+---
+
+## Day 24｜Command
+
+**故事狀態**：柴咖啡展店到連鎖店規模，退款開始要走正式流程——以前小攤子時期客訴退現金，當面處理完就結束，沒有留紀錄的必要；連鎖後退款牽涉會員點數、外送平台金流對帳，操作本身也有金錢風險，店員按錯金額/按錯兩次要能撤銷，主管先擋下一筆確認後又要能重做。阿柴這次沒有先寫土砲版本，直接用 Command 設計客訴處理台——這天沒有「阿柴的版本 → 出包 → 重構」的鋪陳橋段，改成直接展示 Command 版本怎麼設計
+
+**這天新增/變更的類別**
+- `PaymentGateway`（新增）：柴咖啡系統第一次用這個名字，代表退款實際執行的金流閘道，跟 Day 15 定案、只有 `Charge` 沒有退款方法的 `IPaymentProcessor`/`PaymentService` 是不同概念，刻意不重用避免牽連 Day 15/17/18 已知的 `CheckoutController` 三方衝突；`Refund(orderId, amount): void`、`ReverseRefund(orderId, amount): void`
+- `MemberPointsLedger`（新增）：柴咖啡系統第一次用這個名字，代表補償點數的內部帳本，跟 Day 18 定案、只能查詢的 `IMemberPointsService` 是不同概念、不衝突；`AddBonusPoints(phoneNumber, points): void`、`RevokeBonusPoints(phoneNumber, points): void`
+- `ICommand` interface（新增）：`Execute(): void`、`Undo(): void`
+- `RefundCommand`（新增）：實作 `ICommand`，建構子注入 `PaymentGateway` 參考＋`orderId`/`amount`，`Execute()`/`Undo()` 互為鏡像操作
+- `BonusPointsCommand`（新增）：實作 `ICommand`，建構子注入 `MemberPointsLedger` 參考＋`phoneNumber`/`points`，`Execute()`/`Undo()` 互為鏡像操作
+- `MacroCommand`（新增）：實作 `ICommand`，內部持有 `List<ICommand>`，`Execute()` 正向依序執行、`Undo()` 反向走過每個子指令——示範客訴同時要退款＋補償點數，一次執行/一次整組撤銷
+- `SupportConsole`（新增，這天沒有壞版本鋪陳）：Invoker，直接以 Command 版本設計：`_undoStack`/`_redoStack: Stack<ICommand>`，`ExecuteCommand(ICommand): void`、`Undo(): void`、`Redo(): void`
+
+**非柴咖啡系統類別（生活化類比，餐廳點餐與廚房做菜）**：`IDishCommand`、`Cook`（Receiver）、`SteakOrder`/`PastaOrder`（ConcreteCommand）、`Waiter`（Invoker，`_orderHistory: Stack<IDishCommand>`＋`TakeOrder`/`CancelLastOrder`）——顧客=Client／點餐單=Command／服務生=Invoker／廚師=Receiver，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+
+**下一天會被動到的地方**：無，Day 25（Template Method）換一個全新情境（飲料製作固定流程，個別步驟可覆寫），不會再動到 `ICommand`／`PaymentGateway`／`MemberPointsLedger`／`SupportConsole` 這組
+
+---
+
+## Day 25｜Template Method
+
+**故事狀態**：柴咖啡展店到連鎖規模後，做飲料的不再只有阿柴跟小黑——小攤子時期沒有正式 SOP，兩人腦子裡記著就夠了；連鎖之後每間分店都有新報到的店員，不管客人在哪一家分店點同一款飲料都得是同一個味道，飲料品項也會持續增加，之後食安稽核隨時可能再多要求一個共同步驟（例如出杯前貼製作時間標籤）。**這天沒有壞版本鋪陳**，阿柴沒有先寫一版隨手應付、出包才回頭救，一開始就直接用 Template Method 設計飲料製作的 SOP
+
+**這天新增/變更的類別**
+- `DrinkRecipe` 抽象類別（新增，柴咖啡系統第一次用這個名字，不跟前面任何一天衝突）：
+  - `public void Make()` ← Template Method，**刻意不宣告成 `virtual`**，子類別無法覆寫（文中有特別說明 C# 預設非 virtual 即已鎖住，Java 需 `final`）；內部順序為 `if (NeedGrinding()) GrindBeans();` → `Extract()` → `AddIngredients()` → `SealAndLabel()`
+  - `private void GrindBeans()`、`private void SealAndLabel()` ← 固定步驟，製作時間標籤只寫在 `SealAndLabel()` 一處
+  - `protected abstract void Extract()`、`protected abstract void AddIngredients()` ← 基本操作，子類別必須實作
+  - `protected virtual bool NeedGrinding() => true` ← hook
+  - ⚠️ 文中有解釋為什麼步驟用 `protected` 而不是 `public`（是給 `Make()` 在流程中呼叫的，不是給外面挑著單獨叫的，否則流程等於又鬆開）
+- `LatteRecipe`、`AmericanoRecipe`、`MatchaLatteRecipe`（新增）：皆繼承 `DrinkRecipe`，只覆寫 `Extract()`／`AddIngredients()`；`MatchaLatteRecipe` 另外覆寫 `NeedGrinding() => false`（抹茶拿鐵不用磨豆）
+  - ⚠️ **命名刻意避開 `Latte`／`Americano`**：這兩個名字在 Day 9（`Latte : IDrink`）與 Day 11（客製化規格物件）已經撞名衝突過一次（見總覽表 🔴 Day 11 那列），Day 25 改用 `*Recipe`，語意是「製作流程 SOP」而非「飲料物件」，兩者概念不同、不衝突
+  - ⚠️ 這天**沒有**動到 Day 12 的 `MachineDriver.Brew(string drinkName)`，維持獨立情境，避免牽連總覽表已記錄的「第 5 個前台接單類別」問題
+
+**取捨段落談到的限制**（沒有新增類別，但寫作時有明確立場，之後如果回頭潤稿要保持一致）：hook 越加越多代表「這些東西根本不共用同一套流程」；繼承是編譯期綁死的、步驟內容執行期換不掉；父類別改骨架會波及所有子類別；完整流程被拆成父類別＋子類別兩處。**依當天決定，這篇沒有寫 Template Method vs Factory Method／Strategy 的對比段落**，只講限制本身、不點名其他 Pattern
+
+**非柴咖啡系統類別（生活化類比，旅行社一日遊行程）**：`TourPackage`（AbstractClass，`Run()` 是 Template Method，順序為 集合出發 → 上午景點 → 午餐 →（購物站？）→ 下午景點 → 回程；固定步驟 `Gather`/`ShoppingStop`/`GoHome` 皆 `private`；抽象步驟 `MorningSpot`/`Lunch`/`AfternoonSpot` 皆 `protected abstract`；hook `NeedShopping(): bool` 預設 `false`）、`HualienTour`（覆寫 `NeedShopping() => true`）、`YilanTour`（不覆寫，沿用預設）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名。⚠️ 刻意**沒有**用 Head First 經典的「沖泡咖啡 vs 泡茶」，因為那跟當天柴咖啡主線完全重疊
+
+**下一天會被動到的地方**：無，Day 26（State）換一個全新情境（訂單狀態機：接單→製作中→完成→取餐），不會再動到 `DrinkRecipe`／`LatteRecipe`／`AmericanoRecipe`／`MatchaLatteRecipe` 這組
 
 ---
 
 ## 待辦：後續要補的天數
 
-- [ ] Day 24 之後陸續補入
+- [ ] Day 26 之後陸續補入
