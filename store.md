@@ -8,11 +8,11 @@
 
 ---
 
-## 累積總覽表（目前寫到 Day 25）
+## 累積總覽表（目前寫到 Day 27）
 
 | 名稱 | 種類 | 首次出現 | 目前定案（最後一次被改的那天） | 目前定案的簽章／欄位 |
 |---|---|---|---|---|
-| `Order` | class | Day 3（隱含） | 🔴 Day 16 | **確認衝突**：Day 3-4 隱含的 `Order` 只提過 `Items: List<OrderItem>`、`Date`；Day 16 給出完整定義卻是 `OrderId`、`Status: OrderStatus`、`TotalPrice: int`、`Items: List<OrderItem>`——**沒有 `Date` 欄位**，且新增了 Day 3-8 從沒出現過的 `OrderId`／`Status`／`TotalPrice` |
+| `Order` | class | Day 3（隱含） | 🔴 Day 26（共 3 版） | **確認衝突（第三次改版）**：Day 3-4 隱含的 `Order` 只提過 `Items: List<OrderItem>`、`Date`；Day 16 給出完整定義變成 `OrderId`、`Status: OrderStatus`、`TotalPrice: int`、`Items: List<OrderItem>`（沒有 `Date`）；Day 26 再改一次，拿掉 `Status: OrderStatus`，換成 `private IOrderState _state`＋唯讀 `StatusName => _state.Name`（字串，不是 enum），另外新增 `_observers: List<IOrderObserver>`／`Subscribe`／`NotifyCompleted()`（正確銜接 Day 23 的 `IOrderObserver`）。`OrderId`／`TotalPrice`／`Items` 三個欄位跟 Day 16 一致，沒有再變 |
 | `OrderItem` | class | Day 3（隱含） | 🔴 Day 16 | **確認衝突**：Day 4 隱含的 `OrderItem` 是 `Price`、`Quantity`、`DrinkType`（enum）、`OatMilkAddOn`（bool）；Day 16 給出完整定義卻變成 `DrinkName: string`、`Quantity: int`——**沒有 `Price`、`DrinkType`、`OatMilkAddOn`**，用字串代表飲料而不是 Day 4 的 `DrinkType` enum，也是柴咖啡系統第三種「怎麼代表一杯飲料」的方式（enum／`IDrink`多型類別／純字串） |
 | `OrderCalculator` | class | Day 3 | Day 4（Day 17 有引用） | `Calculate(Order order): decimal`（Day 4 起改成建構子注入 `IEnumerable<IDrinkPricing>`，內部邏輯已跟 Day 3 版本不同，但方法簽章沒變）——⚠️ Day 17 的 `CheckoutFacade` 直接呼叫 `_calculator.Calculate(order)`，但 Day 4 版本的計算邏輯要靠 `item.Price`／`item.DrinkType` 去找對應的 `IDrinkPricing`；Day 16 重新定義的 `OrderItem` 已經沒有 `Price`／`DrinkType` 這兩個欄位了，兩邊接不起來，這條依賴鏈實際上兜不攏 |
 | `ReceiptPrinter` | class | Day 3 | Day 3 | `Print(Order order, decimal total): void` |
@@ -57,7 +57,7 @@
 | `PaymentDecorator` | 抽象類別 | Day 15 | Day 15 | 實作 `IPaymentProcessor`，內部持有一個 `IPaymentProcessor`，預設轉呼叫 |
 | `InvoiceDecorator` / `SalesReportDecorator` | class | Day 15 | Day 15 | 皆繼承 `PaymentDecorator` |
 | `CheckoutController` | class | Day 15 | 🔴 Day 18（共 3 種定義） | **確認衝突**：Day 15 依賴 `IPaymentProcessor`、`Checkout(string orderId, int amount): void`；Day 17 依賴 `CheckoutFacade`、`Checkout(Order order): Task<PaymentResult>`；Day 18 依賴 `IMemberPointsService`、`ApplyMemberDiscount(string phoneNumber): void`。三天各自獨立定義，沒有互相銜接，也沒有交代這三個版本是「同一個類別逐步演進」還是「三個不同職責硬用同一個名字」 |
-| `OrderStatus` | enum | Day 16 | Day 16 | `Pending`、`Preparing`、`Completed` |
+| `OrderStatus` | enum | Day 16 | Day 16 | `Pending`、`Preparing`、`Completed`——⚠️ Day 26 把 `Order.Status: OrderStatus` 這個欄位拿掉，改用 State Pattern（`IOrderState`／`StatusName: string`）表示狀態，這個 enum 之後已經沒有被 `Order` 引用，等於孤兒定義，回頭潤稿時可以考慮拿掉或說明兩套狀態表示法並存的原因 |
 | `KitchenService` | class | Day 16 | Day 16 | `ReceiveOrder(Order order): void` |
 | `OrderController` | class | Day 16 | Day 16 | `HandleIncomingOrder(string platform, object payload): void`——外送平台 webhook 接單用，跟前面幾個「前台接單」類別（`OrderService`/`CheckoutService`/`Cashier`/`ComboService`/`OrderCounter`）職責不同（這個是收外部平台訂單，不是門市點餐），但名字風格很像，建議之後統一命名慣例 |
 | `IOrderAdapter` | interface | Day 16 | Day 16 | `ToOrder(): Order` |
@@ -99,6 +99,12 @@
 | `SupportConsole` | class | Day 24 | Day 24 | Invoker，這天沒有壞版本鋪陳，阿柴直接以 Command 設計：`_undoStack`/`_redoStack: Stack<ICommand>`，`ExecuteCommand(ICommand): void`、`Undo(): void`、`Redo(): void` |
 | `DrinkRecipe` | 抽象類別 | Day 25 | Day 25 | AbstractClass：`Make(): void`（Template Method，**非 virtual、不可覆寫**，順序為 `NeedGrinding()`→`GrindBeans()`→`Extract()`→`AddIngredients()`→`SealAndLabel()`）；`private GrindBeans()`／`private SealAndLabel()`（固定步驟，製作時間標籤寫在 `SealAndLabel()`）；`protected abstract Extract()`／`protected abstract AddIngredients()`；`protected virtual NeedGrinding(): bool`（hook，預設 `true`） |
 | `LatteRecipe` / `AmericanoRecipe` / `MatchaLatteRecipe` | class | Day 25 | Day 25 | 皆繼承 `DrinkRecipe`，只覆寫 `Extract()`／`AddIngredients()`；`MatchaLatteRecipe` 另外覆寫 `NeedGrinding() => false`——⚠️ **刻意避開 Day 9／Day 11 已衝突的 `Latte`／`Americano` 類別名**（見上方 🔴 Day 11 那列），語意是「製作流程 SOP」而不是「飲料物件」，跟前面任何一天都不衝突 |
+| `IOrderState` | interface | Day 26 | Day 26 | `Name { get; }`、`Proceed(Order order): void`、`Cancel(Order order): void` |
+| `PendingState` / `PreparingState` / `CompletedState` / `PickedUpState` / `CancelledState` | class | Day 26 | Day 26 | 皆實作 `IOrderState`，對應訂單五個階段（接單/製作中/已完成/已取餐/已取消）；`Proceed()`／`Cancel()` 各自決定合不合法、要不要呼叫 `order.SetState(...)` 換到下一個狀態——`CompletedState`／`PickedUpState`／`CancelledState` 的 `Cancel()` 皆拒絕取消 |
+| `Complaint` | class | Day 27 | Day 27 | `OrderId: string`（沿用 Day 26 定案的 `Order.OrderId`）、`RefundAmount: int`、`IsFoodSafetyIssue: bool`、`Description: string`——柴咖啡系統第一次用這個名字，不跟前面任何一天衝突 |
+| `IComplaintHandler` | interface | Day 27 | Day 27 | `SetNext(IComplaintHandler next): IComplaintHandler`、`Handle(Complaint complaint): void` |
+| `StaffHandler` / `StoreManagerHandler` | class | Day 27 | Day 27 | 皆實作 `IComplaintHandler`；`StaffHandler` 只接「非食安 且 `RefundAmount <= 100`」，`StoreManagerHandler` 只接「非食安 且 `RefundAmount <= 500`」，接不住就呼叫 `_next?.Handle(complaint)` 往下一棒傳 |
+| `HeadquartersComplaintHandler` | class | Day 27 | Day 27 | 實作 `IComplaintHandler`，鏈尾兜底（金額超過店長權限，或食安問題不管金額大小一律跳過前兩棒）；建構子注入 Day 24 的 `SupportConsole`／`PaymentGateway`，核准後組出 Day 24 的 `RefundCommand` 丟進 `SupportConsole.ExecuteCommand(...)` 執行——正確銜接 Day 24 的 Command 機制 |
 
 **非柴咖啡系統類別**（獨立示範用，跟柴咖啡系統無關，不算進上面的累積表）：
 - Day 5（LSP）：`Vehicle`、`Toyota`、`Honda`、`Tesla`、`IRefuelable`、`IChargeable`
@@ -113,6 +119,8 @@
 - Day 23（Observer）：`IWeatherObserver`、`TrainOperator`/`School`/`ConvenienceStore`（ConcreteObserver）、`WeatherBureau`（Subject，`Subscribe`/`Unsubscribe`/`IssueHeavyRainAlert`）——氣象局豪雨特報類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 - Day 24（Command）：`IDishCommand`、`Cook`（Receiver）、`SteakOrder`/`PastaOrder`（ConcreteCommand）、`Waiter`（Invoker，`_orderHistory: Stack<IDishCommand>`＋`TakeOrder`/`CancelLastOrder`）——餐廳點餐與廚房做菜類比（顧客=Client／點餐單=Command／服務生=Invoker／廚師=Receiver），跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 - Day 25（Template Method）：`TourPackage`（AbstractClass，`Run()` 是 Template Method；固定步驟 `Gather`/`ShoppingStop`/`GoHome`；抽象步驟 `MorningSpot`/`Lunch`/`AfternoonSpot`；hook `NeedShopping(): bool` 預設 `false`）、`HualienTour`/`YilanTour`（ConcreteClass，前者覆寫 `NeedShopping() => true`）——旅行社一日遊行程類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名。⚠️ 刻意**沒有**用 Head First 經典的「沖泡咖啡 vs 泡茶」當類比，因為那跟當天柴咖啡主線（飲料製作流程）完全重疊
+- Day 26（State）：`IPlayerState`、`StoppedState`/`PlayingState`/`PausedState`（ConcreteState）、`MusicPlayer`（Context，`_state`／`SetState`／`PressPlay`）——音樂播放器播放鍵類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+- Day 27（Chain of Responsibility）：`IApprover`、`TeamLeadApprover`/`ManagerApprover`/`HRApprover`（ConcreteHandler，依天數門檻逐層核准：組長 ≤3天／經理 ≤7天／人資兜底）、`LeaveRequest`（Request）——公司請假簽核類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
 ---
 
@@ -475,6 +483,39 @@ public CheckoutController(MemberPointsProxy memberPointsService) { ... }
 
 ---
 
+## Day 26｜State
+
+**故事狀態**：柴咖啡連鎖化後，訂單原本只有接單、製作中、完成三階段，小黑要求加上「取餐」，並訂出取消規則（接單、製作中可取消，完成後不可取消）。如果訂單只是拿著一個 `OrderStatus` 列舉值，這些規則就得散落在每個呼叫取消/推進的地方各自判斷，新增階段容易顧此失彼；阿柴把「狀態」拆成物件，讓每個狀態自己知道能不能做、做完換到哪個狀態
+
+**這天新增/變更的類別**
+- `IOrderState` interface（新增）：`Name { get; }`、`Proceed(Order order): void`、`Cancel(Order order): void`
+- `PendingState`、`PreparingState`、`CompletedState`、`PickedUpState`、`CancelledState`（新增）：皆實作 `IOrderState`，對應訂單五個階段；`PreparingState.Proceed()` 呼叫 `order.NotifyCompleted()`，正確銜接 Day 23 的 `IOrderObserver`；`CompletedState`／`PickedUpState`／`CancelledState` 的 `Cancel()` 都拒絕取消
+- 🔴 `Order`：**第三次重新定義**——拿掉 Day 16 版本的 `Status: OrderStatus`，改成 `private IOrderState _state = new PendingState()`、唯讀 `StatusName => _state.Name`（字串，不是 enum），`Proceed()`／`Cancel()` 都只轉交給 `_state`；另外新增 `_observers: List<IOrderObserver>`、`Subscribe(IOrderObserver)`、`NotifyCompleted()`——正確沿用 Day 23 定案的 `IOrderObserver`；`OrderId`／`TotalPrice`／`Items: List<OrderItem>` 三個欄位維持 Day 16 定案不變
+  - ⚠️ Demo 段落 `order.Subscribe(new DeliveryPlatform())` 用的類別名稱是 `DeliveryPlatform`，但 Day 23 定案的類別叫 `DeliveryPlatformSyncer`，這裡對不上，回頭潤稿要挑一個名字統一
+
+**非柴咖啡系統類別（生活化類比，音樂播放器播放鍵）**：`IPlayerState`、`StoppedState`/`PlayingState`/`PausedState`（ConcreteState）、`MusicPlayer`（Context，`_state`／`SetState`／`PressPlay`）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+
+**下一天會被動到的地方**：無，Day 27（Chain of Responsibility）換一個全新情境（客訴處理層層上交），不會再動到 `IOrderState`／`Order` 的狀態機這組
+
+---
+
+## Day 27｜Chain of Responsibility
+
+**故事狀態**：柴咖啡連鎖化之後，客訴量不再是店員一個人扛得住的規模，不同客訴的嚴重程度也差很多(小額退款 vs 食安問題)。阿柴直接照店內三個角色的權責範圍設計責任鏈,**這天沒有壞版本鋪陳**(比照 Day 24、Day 25 的先例，直接展示「有需求 → 用 Pattern 設計」)
+
+**這天新增/變更的類別**
+- `Complaint`（新增）：`OrderId: string`(沿用 Day 26 定案的 `Order.OrderId`)、`RefundAmount: int`、`IsFoodSafetyIssue: bool`、`Description: string`
+- `IComplaintHandler` interface（新增）：`SetNext(IComplaintHandler next): IComplaintHandler`、`Handle(Complaint complaint): void`
+- `StaffHandler`（新增）：只接「非食安 且 `RefundAmount <= 100`」，否則往下一棒傳
+- `StoreManagerHandler`（新增）：只接「非食安 且 `RefundAmount <= 500`」，否則往下一棒傳
+- `HeadquartersComplaintHandler`（新增）：鏈尾兜底(金額超過店長權限，或食安問題不管金額大小一律跳過前兩棒)；建構子注入 Day 24 的 `SupportConsole`／`PaymentGateway`，核准後組出 Day 24 的 `RefundCommand` 丟進 `SupportConsole.ExecuteCommand(...)` 執行——正確銜接 Day 24 的 Command 機制，客訴退款也享有撤銷/重做能力
+
+**非柴咖啡系統類別（生活化類比，公司請假簽核）**：`IApprover`、`TeamLeadApprover`/`ManagerApprover`/`HRApprover`（ConcreteHandler，依天數門檻逐層核准：組長 ≤3天／經理 ≤7天／人資兜底）、`LeaveRequest`（Request）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+
+**下一天會被動到的地方**：無，Day 28（Mediator）換一個全新情境(訂單協調員居中協調廚房/收銀/外送平台)，不會再動到 `IComplaintHandler`／`Complaint` 這組
+
+---
+
 ## 待辦：後續要補的天數
 
-- [ ] Day 26 之後陸續補入
+- [ ] Day 28 之後陸續補入
