@@ -8,7 +8,7 @@
 
 ---
 
-## 累積總覽表（目前寫到 Day 27）
+## 累積總覽表（目前寫到 Day 28）
 
 | 名稱 | 種類 | 首次出現 | 目前定案（最後一次被改的那天） | 目前定案的簽章／欄位 |
 |---|---|---|---|---|
@@ -105,6 +105,12 @@
 | `IComplaintHandler` | interface | Day 27 | Day 27 | `SetNext(IComplaintHandler next): IComplaintHandler`、`Handle(Complaint complaint): void` |
 | `StaffHandler` / `StoreManagerHandler` | class | Day 27 | Day 27 | 皆實作 `IComplaintHandler`；`StaffHandler` 只接「非食安 且 `RefundAmount <= 100`」，`StoreManagerHandler` 只接「非食安 且 `RefundAmount <= 500`」，接不住就呼叫 `_next?.Handle(complaint)` 往下一棒傳 |
 | `HeadquartersComplaintHandler` | class | Day 27 | Day 27 | 實作 `IComplaintHandler`，鏈尾兜底（金額超過店長權限，或食安問題不管金額大小一律跳過前兩棒）；建構子注入 Day 24 的 `SupportConsole`／`PaymentGateway`，核准後組出 Day 24 的 `RefundCommand` 丟進 `SupportConsole.ExecuteCommand(...)` 執行——正確銜接 Day 24 的 Command 機制 |
+| `KitchenService` | class | Day 16 | Day 28（新增方法） | `ReceiveOrder(Order order): void`（Day 16 定案不變）；Day 28 新增 `SetMediator(IOrderMediator mediator): void`、`FinishPreparing(string orderId): void`、`StopPreparing(string orderId): void`，成為 Mediator 模式下的 Colleague |
+| `IOrderMediator` | interface | Day 28 | Day 28 | `NotifyOrderReady(string orderId): void`、`NotifyOrderCancelled(string orderId): void` |
+| `CashierService` | class | Day 28 | Day 28 | 柴咖啡系統第一次用這個名字，代表收銀端；`SetMediator(IOrderMediator mediator): void`、`PrintPickupReceipt(string orderId): void`、`Refund(string orderId): void`——跟 Day 17 的 `CheckoutFacade`（結帳/扣款流程）是不同職責，不衝突 |
+| `IDeliveryPlatformGateway` | interface | Day 28 | Day 28 | `SetMediator(IOrderMediator mediator): void`、`NotifyReadyForPickup(string orderId): void`、`CustomerCancelOrder(string orderId): void`——負責「把狀態推播給外送平台、把客人取消動作回報進來」，跟 Day 16 負責「把外部格式轉成內部 `Order`」的 `IOrderAdapter` 是不同方向的職責，不衝突 |
+| `QberEatsGateway` / `FoodDogGateway` | class | Day 28 | Day 28 | 皆實作 `IDeliveryPlatformGateway` |
+| `OrderCoordinator` | class | Day 28 | Day 28 | ConcreteMediator，實作 `IOrderMediator`，建構子注入 `KitchenService`／`CashierService`／`IDeliveryPlatformGateway` 三者，並呼叫各自的 `SetMediator(this)` |
 
 **非柴咖啡系統類別**（獨立示範用，跟柴咖啡系統無關，不算進上面的累積表）：
 - Day 5（LSP）：`Vehicle`、`Toyota`、`Honda`、`Tesla`、`IRefuelable`、`IChargeable`
@@ -121,6 +127,7 @@
 - Day 25（Template Method）：`TourPackage`（AbstractClass，`Run()` 是 Template Method；固定步驟 `Gather`/`ShoppingStop`/`GoHome`；抽象步驟 `MorningSpot`/`Lunch`/`AfternoonSpot`；hook `NeedShopping(): bool` 預設 `false`）、`HualienTour`/`YilanTour`（ConcreteClass，前者覆寫 `NeedShopping() => true`）——旅行社一日遊行程類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名。⚠️ 刻意**沒有**用 Head First 經典的「沖泡咖啡 vs 泡茶」當類比，因為那跟當天柴咖啡主線（飲料製作流程）完全重疊
 - Day 26（State）：`IPlayerState`、`StoppedState`/`PlayingState`/`PausedState`（ConcreteState）、`MusicPlayer`（Context，`_state`／`SetState`／`PressPlay`）——音樂播放器播放鍵類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 - Day 27（Chain of Responsibility）：`IApprover`、`TeamLeadApprover`/`ManagerApprover`/`HRApprover`（ConcreteHandler，依天數門檻逐層核准：組長 ≤3天／經理 ≤7天／人資兜底）、`LeaveRequest`（Request）——公司請假簽核類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+- Day 28（Mediator）：`IControlTower`（Mediator）、`Aircraft`（Colleague）、`ControlTower`（ConcreteMediator）——機場塔台協調飛機降落類比，跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
 ---
 
@@ -512,10 +519,30 @@ public CheckoutController(MemberPointsProxy memberPointsService) { ... }
 
 **非柴咖啡系統類別（生活化類比，公司請假簽核）**：`IApprover`、`TeamLeadApprover`/`ManagerApprover`/`HRApprover`（ConcreteHandler，依天數門檻逐層核准：組長 ≤3天／經理 ≤7天／人資兜底）、`LeaveRequest`（Request）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
 
-**下一天會被動到的地方**：無，Day 28（Mediator）換一個全新情境(訂單協調員居中協調廚房/收銀/外送平台)，不會再動到 `IComplaintHandler`／`Complaint` 這組
+**下一天會被動到的地方**：`KitchenService`（Day 16）被延伸新增方法；`IOrderAdapter`／`QberEatsOrderAdapter`／`FoodDogOrderAdapter`（Day 16）維持不變、不被觸碰，Day 28 是另外拉一組新介面 `IDeliveryPlatformGateway` 代表反方向的職責
+
+---
+
+## Day 28｜Mediator
+
+**故事狀態**：柴咖啡的訂單牽涉廚房、收銀、外送平台三個角色，任一個角色的動作常常需要同時知會另外兩個（廚房出餐完成要通知收銀＋外送平台；外送平台端客人取消要通知廚房＋收銀）。如果讓這三個角色互相直接持有參照、互相呼叫，任何一個角色的介面或行為一改，另外兩個都要跟著改。**這天沒有壞版本鋪陳**（比照 Day 24、25、27 的先例），阿柴直接引入一個居中的 `OrderCoordinator` 統籌三方
+
+**這天新增/變更的類別**
+- `IOrderMediator` interface（新增）：`NotifyOrderReady(string orderId): void`、`NotifyOrderCancelled(string orderId): void`
+- `KitchenService`（Day 16 既有類別，延伸新增方法）：`ReceiveOrder(Order order)` 維持不變，新增 `SetMediator(IOrderMediator mediator): void`、`FinishPreparing(string orderId): void`（出餐完成，通知協調員）、`StopPreparing(string orderId): void`（收到協調員通知才停止製作）
+- `CashierService`（新增，柴咖啡系統第一次用這個名字）：`SetMediator(IOrderMediator mediator): void`、`PrintPickupReceipt(string orderId): void`、`Refund(string orderId): void`——跟 Day 17 的 `CheckoutFacade`（結帳/扣款流程）是不同職責，不衝突
+- `IDeliveryPlatformGateway` interface（新增）：`SetMediator(IOrderMediator mediator): void`、`NotifyReadyForPickup(string orderId): void`、`CustomerCancelOrder(string orderId): void`——負責「推播狀態給外送平台、回報客人取消動作」，跟 Day 16 負責「把外部格式轉成內部 `Order`」的 `IOrderAdapter` 是不同方向的職責，兩組介面並存、互不影響
+- `QberEatsGateway`、`FoodDogGateway`（新增）：皆實作 `IDeliveryPlatformGateway`
+- `OrderCoordinator`（新增）：ConcreteMediator，實作 `IOrderMediator`，建構子注入 `KitchenService`／`CashierService`／`IDeliveryPlatformGateway`，並呼叫各自的 `SetMediator(this)` 完成雙向掛勾
+
+**跟 Day 23 Observer 的區隔**：文中特別寫了一段對比——Observer 是 Subject 對多個 Observer 的單向廣播（發送方固定），今天的情境是廚房／收銀／外送平台互為觸發來源、互為通知對象（發送方會隨事件互換），才需要一個中心化的協調者，而不是每個角色各自維護一份訂閱清單
+
+**非柴咖啡系統類別（生活化類比，機場塔台）**：`IControlTower`（Mediator）、`Aircraft`（Colleague，只認識塔台）、`ControlTower`（ConcreteMediator，管理跑道佔用狀態）——跟柴咖啡系統無關，也不跟前面任何一天的類別撞名
+
+**下一天會被動到的地方**：無，Day 29 是系列收尾（AI 設計盲點＋為什麼 Iterator/Visitor/Interpreter/Memento 沒展開講），屬於總結性質，預期不會再新增/變更柴咖啡系統的具體類別
 
 ---
 
 ## 待辦：後續要補的天數
 
-- [ ] Day 28 之後陸續補入
+- [ ] Day 29 之後陸續補入
